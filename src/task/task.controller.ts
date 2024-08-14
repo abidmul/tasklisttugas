@@ -4,13 +4,15 @@ import {
   Delete,
   Get,
   Param,
+  Patch,
   Post,
   Put,
+  Query,
   Redirect,
   Render,
 } from '@nestjs/common';
-import { CreateTask, Task } from './dto/create-task-dto';
-import { PrismaClient } from '@prisma/client';
+import { Task } from './dto/create-task-dto';
+import { PrismaClient, Status, Task as TaskModel } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -80,7 +82,7 @@ export class TaskController {
 
   @Post('store')
   @Redirect('/task')
-  async store(@Body() task: CreateTask) {
+  async store(@Body() task: Task) {
     const data = {
       ...task,
       dueDate: new Date(task.dueDate),
@@ -104,5 +106,45 @@ export class TaskController {
       },
       data,
     });
+  }
+  @Patch('move/:id')
+  @Redirect('/task/progress')
+  async move(@Param('id') id: string, @Query('status') status: Status) {
+    await prisma.task.update({
+      where: {
+        id: Number(id),
+      },
+      data: {
+        status,
+      },
+    });
+  }
+
+  @Get('progress')
+  @Render('task/progress')
+  async progress(): Promise<{
+    pageTitle: string;
+    groupedTasks: Record<Status, TaskModel[]>;
+  }> {
+    const pageTitle = 'Task Progress';
+    let tasks = [];
+
+    tasks = await prisma.task.findMany();
+
+    const groupedTasks = tasks.reduce(
+      (acc, task) => {
+        if (!acc[task.status]) {
+          acc[task.status] = [];
+        }
+        acc[task.status].push(task);
+        return acc;
+      },
+      {} as Record<Status, TaskModel[]>,
+    );
+
+    return {
+      pageTitle,
+      groupedTasks,
+    };
   }
 }
